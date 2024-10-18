@@ -168,7 +168,7 @@ public:
         //Store the effective shear_mod of the particle pairs [1][1], [1][2], [2][1], [2][2]
         //??Seg fault since Yeff[0] Yeff[1] only exists by declaration
         //?? move variable declarations outisde the loop
-        const double Eeff = Yeff[ti][tj];
+        const double Eeff = Yeff[ti-1][tj-1];
 
         //Loop over number of particles
         for (int i = 0; i < nlocal; i++) {
