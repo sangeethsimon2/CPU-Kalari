@@ -124,12 +124,12 @@ public:
       //?? Shift declaration of the shear_mod var to outside the loop
       //++ Why is type[i] not showing seg fault for type[2] when i=2 : RESOLVED
       //?? Is Y[type[i]] and nu[type[]] optimal in memory access?
-      double shear_mod = Y[type[i] - 1] / (2. * (nu[type[i] - 1] + 1.));
+      double shear_mod = Y[type[i%type.size()] - 1] / (2. * (nu[type[i%type.size()] - 1] + 1.));
 
       //Compute rayleigh time of the ith particle
       //?? is nu[type[i]] optimal in memory access?
       rayleigh_time_i = M_PI * rad * sqrt(density[i] / shear_mod) /
-                        (0.1631 * nu[type[i] - 1] + 0.8766);
+                        (0.1631 * nu[type[i%type.size()] - 1] + 0.8766);
       
       //This if condition works for both types of particles
       //?? Can be removed since it is redundant
@@ -187,7 +187,7 @@ public:
           //??Can we remove it?
           if (mask[i] & groupbit) {
 
-            if (type[i] != ti || type[i] != tj)
+            if (type[i%type.size()] != ti || type[i%type.size()] != tj)
               continue;
             
             //Compute effective mass
@@ -228,15 +228,22 @@ public:
 };
 
 int main() {
+  //Class instantiation
   MyClass c;
+
+  //??This start seems to be unused.
   auto start = std::chrono::high_resolution_clock::now();
+  //Console output
   std::cout << std::setw(10) << "nlocal" << std::setw(15) << "hertz_time"
             << std::setw(15) << "rayleigh_time" << std::setw(15)
             << "run_time [ms]" << "\n";
+  //Initialize duration
   int duration_sum = 0;
+  //Vary the number of points in the powers of 10 and call the fun() with it as arguments
   for (int i = 1; i < 8; ++i) {
     duration_sum += c.fun(pow(10, i));
   }
+  //Print the total elapsed time
   std::cout << std::setw(40) << "" << std::setw(15) << duration_sum << "\n";
   return 0;
 }
