@@ -40,8 +40,8 @@ class MyClass {
 
   // Method to compute square of velocity comp
   //??Not const-qualified for arguments or function signature
-  //??Possibly inline to prevent repeated function pointer indirection  
-  template <typename T> double vectorMag3DSquared(T &v) {
+  //++Possibly inline to prevent repeated function pointer indirection  - -03 seems to be inlining this for std::array<double,3>
+   template <typename T> double vectorMag3DSquared(const T &v) const {
     return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
   }
 
