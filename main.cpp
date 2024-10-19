@@ -109,16 +109,19 @@ public:
     double vmax_sqr = 0.;
     double vmag_sqr;
     double rayleigh_time_i;
-    
+    double rad = 0.;
     //Clock start
     auto start = std::chrono::high_resolution_clock::now();
+
+    auto minIterator = std::min_element(r.begin(), r.end());
+    r_min = *minIterator;
 
     //Loop over nlocal particles
     //??Think about thread parallelism here; each particle to a thread with a parallel red?
     for (int i = 0; i < nlocal; i++) {
       //Read and store radius of the ith particle
       //?? declaration of double can be shifted outside?
-      double rad = r[i];
+      //rad = r[i];
 
       // Compute shear modulus of the ith particle
       //?? Shift declaration of the shear_mod var to outside the loop
@@ -128,7 +131,7 @@ public:
 
       //Compute rayleigh time of the ith particle
       //?? is nu[type[i]] optimal in memory access?
-      rayleigh_time_i = M_PI * rad * sqrt(density[i] / shear_mod) /
+      rayleigh_time_i = M_PI * r[i] * sqrt(density[i] / shear_mod) /
                         (0.1631 * nu[type[i%type.size()] - 1] + 0.8766);
       
       //This if condition works for both types of particles
@@ -142,8 +145,8 @@ public:
         //Tries to find out if the computed rad is smaller than the obtained rad and replaces it if true
         //?? can we do better than an if?
         //Since rad is not computed, move the whole computation outside the loop and use std::min
-        if (rad < r_min)
-          r_min = rad;
+        //if (rad < r_min)
+        //  r_min = rad;
       }
     }
 
