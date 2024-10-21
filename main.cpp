@@ -97,12 +97,12 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     std::array<double, max_type> nu({0.2, 0.2});
     
     //A vector of vector of size 2 that has 2 values each; possibly effective young's modulus
-    std::array<std::array<double, max_type>, max_type> Yeff({1.25e6, 1.75e6});
+    std::array<std::array<double, max_type>, max_type> Yeff{{{1.25e6, 1.75e6}, {1.25e6, 1.75e6}}};
 
     //Variables to store the coefficients used within the Rayleigh time compute loop
-    std::array<double, max_type>coeff1_nu{0.};
-    std::array<double, max_type>coeff2_nu{0.};
-    std::array<double, max_type>coeff_shearMod{0.};
+    std::array<double, max_type>coeff1_nu({0.});
+    std::array<double, max_type>coeff2_nu({0.});
+    std::array<double, max_type>coeff_shearMod({0.});
 
     
 
