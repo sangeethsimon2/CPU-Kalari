@@ -36,8 +36,8 @@ you identify what this comment refers to? I.e. what is not exact?
 //const maximum number of types
 constexpr int max_type = 2;
 
-//?? What is this used for?
-    constexpr int groupbit = 1;
+//Unknown purpose?
+constexpr int groupbit = 1;
 
 class MyClass {
   double rayleigh_time;
@@ -45,13 +45,10 @@ class MyClass {
   double hertz_time;
 
   // Method to compute square of velocity comp
-  //??Not const-qualified for arguments or function signature
-  //++Possibly inline to prevent repeated function pointer indirection  - -03 seems to be inlining this for std::array<double,3>
    template <typename T> double vectorMag3DSquared(const T &v) const {
     return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
   }
    
-
 public:
     double fun(const int);
 };
@@ -104,10 +101,6 @@ double MyClass::fun(const int nlocal) {
     std::array<double, max_type>coeff2_nu({0.});
     std::array<double, max_type>coeff_shearMod({0.});
 
-    
-
-    
-    
     //Store '1' for half the points and '3' for the remaining
     int half_nlocal = nlocal / 2;
     for (int i = 0; i < half_nlocal; ++i) {
@@ -237,10 +230,11 @@ double MyClass::fun(const int nlocal) {
 
             //Compute hertz time
             //??Avoid pow() and divisions
-            hertz_time_i =
-                2.87 *
-                pow(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation),
-                    0.2);
+            // hertz_time_i =
+            //     2.87 *
+            //     pow(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation),
+            //         0.2);
+            hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
             //Find min hertz time among all particles 
             hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
           }
@@ -248,7 +242,7 @@ double MyClass::fun(const int nlocal) {
       }
     }
     //Store the final minimal hertz time as the simulation deltaT
-    hertz_time = hertz_time_min;
+    hertz_time = 2.87*pow(hertz_time_min, 0.2);
 
     //End timer and compute elapsed time
     auto end = std::chrono::high_resolution_clock::now();
