@@ -61,7 +61,7 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 }
 
-  double MyClass::fun(const int nlocal) {
+double MyClass::fun(const int nlocal) {
     //nlocal = 10...10^7
 
     // PREAMBLE: Each particle in the system has its own density, radius, and
@@ -88,16 +88,16 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
 
     //A vector 'type' that contains just 2 integers
     //Possibly denoting types of particles
-    std::array<int, max_type> type({1, 2});
+    const std::array<int, max_type> type({1, 2});
     
     //Vector 'Y' storing 2 values, possibly young's modulus of 2 'types' of particles
-    std::array<double, max_type> Y({1e6, 2e6});
+    const std::array<double, max_type> Y({1e6, 2e6});
     
     //vector 'nu' storing 2 similar values, possibly viscosity of the particles
-    std::array<double, max_type> nu({0.2, 0.2});
+    const std::array<double, max_type> nu({0.2, 0.2});
     
     //A vector of vector of size 2 that has 2 values each; possibly effective young's modulus
-    std::array<std::array<double, max_type>, max_type> Yeff{{{1.25e6, 1.75e6}, {1.25e6, 1.75e6}}};
+    const std::array<std::array<double, max_type>, max_type> Yeff{{{1.25e6, 1.75e6}, {1.25e6, 1.75e6}}};
 
     //Variables to store the coefficients used within the Rayleigh time compute loop
     std::array<double, max_type>coeff1_nu({0.});
@@ -116,9 +116,6 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     for (int i = half_nlocal; i < nlocal; ++i) {
       mask[i] = 3;
     }
-
-    constexpr std::array<int, max_type> mask_alt({1,3});
-    
     // END PREAMBLE
 
     // check rayleigh time and vmax of particles
@@ -129,8 +126,7 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     r_min = std::numeric_limits<double>::max();
     
     //Initializer
-    double vmax_sqr = 0.;
-    double vmag_sqr;
+    
     double rayleigh_time_i;
     double rad = 0.;
     double shear_mod =0.;
@@ -144,6 +140,8 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     double hertz_time_i, meff, reff;
 
     //Initializer of max vel of the mesh, possibly mesh based velocity
+    double vmax_sqr = 0.;
+    double vmag_sqr;
     //const double vmax_sqr_mesh = 0.;
     const double sqrt_vmax_sqr_mesh = 0.;
     //Declare sqr of vmax_sqr
@@ -152,6 +150,8 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     double v_rel_max_simulation = 0.;
     //Coefficients for meff
     const double coeff_meff = M_PI/3.0;
+    //Eff
+    double Eeff = 0.;
 
     
 
@@ -205,9 +205,7 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
       for (int tj = 1; tj < max_type + 1; tj++) {
 
         //Store the effective shear_mod of the particle pairs [1][1], [1][2], [2][1], [2][2]
-        //??Seg fault since Yeff[0] Yeff[1] only exists by declaration
-        //?? move variable declarations outisde the loop
-        const double Eeff = Yeff[ti-1][tj-1];
+        Eeff = Yeff[ti-1][tj-1];
   
         //Loop over number of particles
         for (int i = 0; i < nlocal; i++) {
