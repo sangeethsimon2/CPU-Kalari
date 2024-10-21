@@ -33,6 +33,8 @@ you identify what this comment refers to? I.e. what is not exact?
 
 */
 
+
+
 class MyClass {
   double rayleigh_time;
   double r_min;
@@ -44,9 +46,18 @@ class MyClass {
    template <typename T> double vectorMag3DSquared(const T &v) const {
     return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
   }
+   
 
 public:
-  auto fun(const int nlocal) {
+    double fun(const int);
+};
+
+//Explicit specialization
+template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3> &v) const {
+    return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+}
+
+  double MyClass::fun(const int nlocal) {
     //nlocal = 10...10^7
 
     // PREAMBLE: Each particle in the system has its own density, radius, and
@@ -96,6 +107,7 @@ public:
 
     //Initializer of max vel of the mesh, possibly mesh based velocity
     const double vmax_sqr_mesh = 0.;
+    const double sqrt_vmax_sqr_mesh = 0.;
     // END PREAMBLE
 
     // check rayleigh time and vmax of particles
@@ -110,6 +122,10 @@ public:
     double vmag_sqr;
     double rayleigh_time_i;
     double rad = 0.;
+    double shear_mod =0.;
+    double nuForEachParticle =0.;
+    int typeIndex=-2;
+
     //Clock start
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -122,29 +138,38 @@ public:
       //Read and store radius of the ith particle
       //?? declaration of double can be shifted outside?
       //rad = r[i];
-
+      
+      //type access index 
+      typeIndex = i%type.size();
+    
+      //Compute nu for each particle
+      nuForEachParticle = nu[type[typeIndex] - 1];
       // Compute shear modulus of the ith particle
-      //?? Shift declaration of the shear_mod var to outside the loop
+      //++ Shift declaration of the shear_mod var to outside the loop
       //++ Why is type[i] not showing seg fault for type[2] when i=2 : RESOLVED
       //?? Is Y[type[i]] and nu[type[]] optimal in memory access?
-      double shear_mod = Y[type[i%type.size()] - 1] / (2. * (nu[type[i%type.size()] - 1] + 1.));
+      //?? nu[type[]] is accessed twice, store it once. 
+      //?? remove divisions
+      shear_mod = Y[type[typeIndex] - 1] / (2. * (nuForEachParticle + 1.));
 
       //Compute rayleigh time of the ith particle
       //?? is nu[type[i]] optimal in memory access?
+      //?? Remove divisions
       rayleigh_time_i = M_PI * r[i] * sqrt(density[i] / shear_mod) /
-                        (0.1631 * nu[type[i%type.size()] - 1] + 0.8766);
+                        (0.1631 * nuForEachParticle + 0.8766);
       
       //This if condition works for both types of particles
-      //?? Can be removed since it is redundant
+      //?? Can be removed since it is redundant (check with LIGGGHTS code)
       if (mask[i] & groupbit) {
         //Tries to find out if the computed time is smaller than the stored time and replaces it if true
-        //?? Can we do better than an if?
-        if (rayleigh_time_i < rayleigh_time)
-          rayleigh_time = rayleigh_time_i;
-        
+        //++ Can we do better than an if? - replaced with std::min
+        //if (rayleigh_time_i < rayleigh_time)
+        //  rayleigh_time = rayleigh_time_i;
+        rayleigh_time = std::min(rayleigh_time, rayleigh_time_i);
+
         //Tries to find out if the computed rad is smaller than the obtained rad and replaces it if true
-        //?? can we do better than an if?
-        //Since rad is not computed, move the whole computation outside the loop and use std::min
+        //++ can we do better than an if? - Refactored to outside the loop
+        //Since rad is not computed, move the whole computation outside the loop and use std::min_element
         //if (rad < r_min)
         //  r_min = rad;
       }
@@ -161,7 +186,14 @@ public:
 
     //Declare local var for the loop
     double hertz_time_i, meff, reff;
-    
+
+    //Declare sqr of vmax_sqr
+    double coeff_sqrt_vmax_sqr = 0.;
+    double coeff_sumOfvMaxAndvMaxMesh = 0.;
+
+    //Coefficients for meff
+    const double coeff_meff = M_PI/3.0;
+
     //?? Can we do better than 4 iterations here? Maybe a lookup table?
     //First loop over the type of particles {1,2}   
     for (int ti = 1; ti < max_type + 1; ti++) {
@@ -172,33 +204,42 @@ public:
         //??Seg fault since Yeff[0] Yeff[1] only exists by declaration
         //?? move variable declarations outisde the loop
         const double Eeff = Yeff[ti-1][tj-1];
-
+  
         //Loop over number of particles
         for (int i = 0; i < nlocal; i++) {
+          
+          //type access index 
+          typeIndex = i%type.size();
+
           // decide vmax - either particle-particle or particle-mesh contact
           vmag_sqr = vectorMag3DSquared(v[i]);
-          if (vmag_sqr > vmax_sqr)
-            vmax_sqr = vmag_sqr;
+          vmax_sqr = std::max(vmag_sqr, vmax_sqr);
+          coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
+          coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
+
+          //??Remove the if
+          //if (vmag_sqr > vmax_sqr)
+          //  vmax_sqr = vmag_sqr;
           
           //Compute rel max velocity in the simulation between particle and mesh vel
           //?? Move variable declaration outside
           //??sqrt() could be expensive within the loop. 
-          double v_rel_max_simulation = std::max(
-              2. * sqrt(vmax_sqr), sqrt(vmax_sqr) + sqrt(vmax_sqr_mesh));
+          
+          double v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
           
           //This branch works for all types
           //??Can we remove it?
           if (mask[i] & groupbit) {
 
-            if (type[i%type.size()] != ti || type[i%type.size()] != tj)
+            if (type[typeIndex] != ti || type[typeIndex] != tj)
               continue;
             
             //Compute effective mass
             //??Avoid divisions  
-            meff = 4. * r[i] * r[i] * r[i] * M_PI / 3. * density[i];
+            meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
             //Compute effective radius
             //??Avoid divisions
-            reff = r[i] / 2.;
+            reff = r[i] * 0.5;
             
             //Compute hertz time
             //??Avoid pow() and divisions
@@ -206,10 +247,12 @@ public:
                 2.87 *
                 pow(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation),
                     0.2);
+            //hertz_time_i = 2.87 * sqrt(cbrt(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation)));        
             //Find min hertz time among all particles
             //??Can we do better than 'if' branch?
-            if (hertz_time_i < hertz_time_min)
-              hertz_time_min = hertz_time_i;
+            //if (hertz_time_i < hertz_time_min)
+            //  hertz_time_min = hertz_time_i;
+            hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
           }
         }
       }
@@ -228,7 +271,7 @@ public:
               << duration_count << "\n";
     return duration_count;
   }
-};
+
 
 int main() {
   //Class instantiation
