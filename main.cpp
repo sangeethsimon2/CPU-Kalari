@@ -36,6 +36,9 @@ you identify what this comment refers to? I.e. what is not exact?
 //const maximum number of types
 constexpr int max_type = 2;
 
+//?? What is this used for?
+    constexpr int groupbit = 1;
+
 class MyClass {
   double rayleigh_time;
   double r_min;
@@ -101,8 +104,7 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     std::array<double, max_type>coeff2_nu{0.};
     std::array<double, max_type>coeff_shearMod{0.};
 
-    //?? What is this used for?
-    int groupbit = 1;
+    
 
     
     
@@ -114,6 +116,8 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
     for (int i = half_nlocal; i < nlocal; ++i) {
       mask[i] = 3;
     }
+
+    constexpr std::array<int, max_type> mask_alt({1,3});
     
     // END PREAMBLE
 
@@ -166,6 +170,7 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
       coeff2_nu[i]= 1./(0.1631 * nu[i] + 0.8766);
       coeff_shearMod[i] = 1.0/(Y[i]*coeff1_nu[i]);
     }
+
     //Loop over nlocal particles
     //??Think about thread parallelism here; each particle to a thread with a parallel red?
     for (int i = 0; i < nlocal; i++) {
@@ -177,10 +182,14 @@ template <> inline double MyClass::vectorMag3DSquared(const std::array<double,3>
       
       //This if condition works for both types of particles
       //?? Can be removed since it is redundant (check with LIGGGHTS code)
-      //if constexpr (mask[i] & groupbit) {
+      if (mask[i] & groupbit) {
         rayleigh_time = std::min(rayleigh_time, rayleigh_time_i);
-     // }
+      }
     }
+
+   
+
+
 
     // check estimation for hertz time
     // this is not exact...
