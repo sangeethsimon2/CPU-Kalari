@@ -39,6 +39,7 @@ constexpr int max_type = 2;
 //Unknown purpose?
 constexpr int groupbit = 1;
 
+//Class declaration
 class MyClass {
   double rayleigh_time;
   double r_min;
@@ -118,8 +119,7 @@ double MyClass::fun(const int nlocal) {
     //Set value of r_min to max possible double value
     r_min = std::numeric_limits<double>::max();
     
-    //Initializer
-    
+    //Initializers 
     double rayleigh_time_i;
     double rad = 0.;
     double shear_mod =0.;
@@ -146,8 +146,7 @@ double MyClass::fun(const int nlocal) {
     //Eff
     double Eeff = 0.;
 
-    
-
+  
     //Clock start
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -165,7 +164,6 @@ double MyClass::fun(const int nlocal) {
     }
 
     //Loop over nlocal particles
-    //??Think about thread parallelism here; each particle to a thread with a parallel red?
     for (int i = 0; i < nlocal; i++) {
       //type access index 
       typeIndex = i%type.size();
@@ -174,15 +172,11 @@ double MyClass::fun(const int nlocal) {
       rayleigh_time_i = M_PI * r[i] * sqrt(density[i] * coeff_shearMod[typeIndex]) * coeff2_nu[typeIndex];
       
       //This if condition works for both types of particles
-      //?? Can be removed since it is redundant (check with LIGGGHTS code)
+      //?? Looks redundant for the given type mask and groupbit values
       if (mask[i] & groupbit) {
         rayleigh_time = std::min(rayleigh_time, rayleigh_time_i);
       }
     }
-
-   
-
-
 
     // check estimation for hertz time
     // this is not exact...
@@ -190,195 +184,160 @@ double MyClass::fun(const int nlocal) {
     //  loop all particles
     //     test collision of particle with itself
     
-    
-    //?? Can we do better than 4 iterations here? Maybe a lookup table?
-    //First loop over the type of particles {1,2}   
-    // for (int ti = 1; ti < max_type + 1; ti++) {
-    //   // Second loop over the type of particles {1,2}
-    //   for (int tj = 1; tj < max_type + 1; tj++) {
+    //For the particle pair {1,1}
+    Eeff = Yeff[0][0];
+    int ti = 1; int tj=1;
 
-    //     //Store the effective shear_mod of the particle pairs [1][1], [1][2], [2][1], [2][2]
-    //     Eeff = Yeff[ti-1][tj-1];
-        Eeff = Yeff[0][0];
-        int ti = 1; int tj=1;
+    //Loop over number of particles
+    for (int i = 0; i < nlocal; i++) {
+      
+      //type access index 
+      typeIndex = i%type.size();
 
-        //Loop over number of particles
-        for (int i = 0; i < nlocal; i++) {
-          
-          //type access index 
-          typeIndex = i%type.size();
+      // decide vmax - either particle-particle or particle-mesh contact
+      vmag_sqr = vectorMag3DSquared(v[i]);
+      vmax_sqr = std::max(vmag_sqr, vmax_sqr);
+      coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
+      coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
 
-          // decide vmax - either particle-particle or particle-mesh contact
-          vmag_sqr = vectorMag3DSquared(v[i]);
-          vmax_sqr = std::max(vmag_sqr, vmax_sqr);
-          coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
-          coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
+      //Compute rel max velocity in the simulation between particle and mesh vel
+      v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
+      
+      //This branch works for all types
+      //?? Redundant:Can we remove it?
+      if (mask[i] & groupbit) {
 
-          //Compute rel max velocity in the simulation between particle and mesh vel
-          v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
-          
-          //This branch works for all types
-          //??Can we remove it?
-          if (mask[i] & groupbit) {
+        if (type[typeIndex] != ti || type[typeIndex] != tj)
+          continue;
+        
+        //Compute effective mass
+        meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
+        
+        //Compute effective radius
+        reff = r[i] * 0.5;
 
-            if (type[typeIndex] != ti || type[typeIndex] != tj)
-              continue;
-            
-            //Compute effective mass
-            meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
-            
-            //Compute effective radius
-            reff = r[i] * 0.5;
-
-            //Compute hertz time
-            //??Avoid pow() and divisions
-            // hertz_time_i =
-            //     2.87 *
-            //     pow(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation),
-            //         0.2);
-            hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
-            //Find min hertz time among all particles 
-            hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
-          }
-        }
-      //}
-    //}
-    // //Store the final minimal hertz time as the simulation deltaT
-    // hertz_time = 2.87*pow(hertz_time_min, 0.2);
-
+        //Compute hertz time
+        hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
+        //Find min hertz time among all particles 
+        hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
+      }
+    }
+    //For the particle pair {1,2}
     Eeff = Yeff[0][1];
     ti = 1; tj=2;
      
-        //Loop over number of particles
-        for (int i = 0; i < nlocal; i++) {
-          
-          //type access index 
-          typeIndex = i%type.size();
+    //Loop over number of particles
+    for (int i = 0; i < nlocal; i++) {
+      
+      //type access index 
+      typeIndex = i%type.size();
 
-          // decide vmax - either particle-particle or particle-mesh contact
-          vmag_sqr = vectorMag3DSquared(v[i]);
-          vmax_sqr = std::max(vmag_sqr, vmax_sqr);
-          coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
-          coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
+      // decide vmax - either particle-particle or particle-mesh contact
+      vmag_sqr = vectorMag3DSquared(v[i]);
+      vmax_sqr = std::max(vmag_sqr, vmax_sqr);
+      coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
+      coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
 
-          //Compute rel max velocity in the simulation between particle and mesh vel
-          v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
-          
-          //This branch works for all types
-          //??Can we remove it?
-          if (mask[i] & groupbit) {
+      //Compute rel max velocity in the simulation between particle and mesh vel
+      v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
+      
+      //This branch works for all types
+      //??Redundant: Can we remove it?
+      if (mask[i] & groupbit) {
 
-            if (type[typeIndex] != ti || type[typeIndex] != tj)
-              continue;
-            
-            //Compute effective mass
-            meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
-            
-            //Compute effective radius
-            reff = r[i] * 0.5;
+        if (type[typeIndex] != ti || type[typeIndex] != tj)
+          continue;
+        
+        //Compute effective mass
+        meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
+        
+        //Compute effective radius
+        reff = r[i] * 0.5;
 
-            //Compute hertz time
-            //??Avoid pow() and divisions
-            // hertz_time_i =
-            //     2.87 *
-            //     pow(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation),
-            //         0.2);
-            hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
-            //Find min hertz time among all particles 
-            hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
-          }
-        }
-      //}
-    //}
-
+        //Compute hertz time 
+        hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
+        //Find min hertz time among all particles 
+        hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
+      }
+    }
+    //For the particle pair {2,1}
     Eeff = Yeff[1][0];
     ti = 2; tj=1;
-     
-        //Loop over number of particles
-        for (int i = 0; i < nlocal; i++) {
+
+     //Loop over particles
+    for (int i = 0; i < nlocal; i++) {
+    
+        //type access index 
+        typeIndex = i%type.size();
+
+        // decide vmax - either particle-particle or particle-mesh contact
+        vmag_sqr = vectorMag3DSquared(v[i]);
+        vmax_sqr = std::max(vmag_sqr, vmax_sqr);
+        coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
+        coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
+
+        //Compute rel max velocity in the simulation between particle and mesh vel
+        v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
+        
+        //This branch works for all types
+        //??Can we remove it?
+        if (mask[i] & groupbit) {
+
+          if (type[typeIndex] != ti || type[typeIndex] != tj)
+            continue;
           
-          //type access index 
-          typeIndex = i%type.size();
-
-          // decide vmax - either particle-particle or particle-mesh contact
-          vmag_sqr = vectorMag3DSquared(v[i]);
-          vmax_sqr = std::max(vmag_sqr, vmax_sqr);
-          coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
-          coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
-
-          //Compute rel max velocity in the simulation between particle and mesh vel
-          v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
+          //Compute effective mass
+          meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
           
-          //This branch works for all types
-          //??Can we remove it?
-          if (mask[i] & groupbit) {
+          //Compute effective radius
+          reff = r[i] * 0.5;
 
-            if (type[typeIndex] != ti || type[typeIndex] != tj)
-              continue;
-            
-            //Compute effective mass
-            meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
-            
-            //Compute effective radius
-            reff = r[i] * 0.5;
-
-            //Compute hertz time
-            //??Avoid pow() and divisions
-            // hertz_time_i =
-            //     2.87 *
-            //     pow(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation),
-            //         0.2);
-            hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
-            //Find min hertz time among all particles 
-            hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
-          }
+          //Compute hertz time
+          hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
+          //Find min hertz time among all particles 
+          hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
         }
-      //}
-    //}
+      }
+    
+    //For the particle pair {2,2}
     Eeff = Yeff[1][1];
     ti = 2; tj=2;
-     
-        //Loop over number of particles
-        for (int i = 0; i < nlocal; i++) {
-          
-          //type access index 
-          typeIndex = i%type.size();
+    
+    //Loop over number of particles
+    for (int i = 0; i < nlocal; i++) {
+      
+      //type access index 
+      typeIndex = i%type.size();
 
-          // decide vmax - either particle-particle or particle-mesh contact
-          vmag_sqr = vectorMag3DSquared(v[i]);
-          vmax_sqr = std::max(vmag_sqr, vmax_sqr);
-          coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
-          coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
+      // decide vmax - either particle-particle or particle-mesh contact
+      vmag_sqr = vectorMag3DSquared(v[i]);
+      vmax_sqr = std::max(vmag_sqr, vmax_sqr);
+      coeff_sqrt_vmax_sqr = 2.* sqrt(vmax_sqr);
+      coeff_sumOfvMaxAndvMaxMesh = 0.5*coeff_sqrt_vmax_sqr + sqrt_vmax_sqr_mesh;
 
-          //Compute rel max velocity in the simulation between particle and mesh vel
-          v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
-          
-          //This branch works for all types
-          //??Can we remove it?
-          if (mask[i] & groupbit) {
+      //Compute rel max velocity in the simulation between particle and mesh vel
+      v_rel_max_simulation = std::max(coeff_sqrt_vmax_sqr, coeff_sumOfvMaxAndvMaxMesh );
+      
+      //This branch works for all types
+      //??Can we remove it?
+      if (mask[i] & groupbit) {
 
-            if (type[typeIndex] != ti || type[typeIndex] != tj)
-              continue;
-            
-            //Compute effective mass
-            meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
-            
-            //Compute effective radius
-            reff = r[i] * 0.5;
+        if (type[typeIndex] != ti || type[typeIndex] != tj)
+          continue;
+        
+        //Compute effective mass
+        meff = 4. * r[i] * r[i] * r[i] * coeff_meff * density[i];
+        
+        //Compute effective radius
+        reff = r[i] * 0.5;
 
-            //Compute hertz time
-            //??Avoid pow() and divisions
-            // hertz_time_i =
-            //     2.87 *
-            //     pow(meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation),
-            //         0.2);
-            hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
-            //Find min hertz time among all particles 
-            hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
-          }
-        }
-      //}
-    //}
+        //Compute hertz time 
+        hertz_time_i = meff * meff / (reff * Eeff * Eeff * v_rel_max_simulation);
+        //Find min hertz time among all particles 
+        hertz_time_min = std::min(hertz_time_i, hertz_time_min);  
+      }
+    }
+    
     //Store the final minimal hertz time as the simulation deltaT
     hertz_time = 2.87*pow(hertz_time_min, 0.2);
 
